@@ -1,0 +1,6 @@
+.env
+.idea/
+jwtkey/
+*.env
+vendor/
+debug

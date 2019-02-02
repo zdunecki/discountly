@@ -1,0 +1,44 @@
+version: '3'
+services:
+  debug_e2e:
+    build: .
+    volumes:
+      - ./:/go/src/github.com/zdunecki/discountly/
+    entrypoint: dlv test --headless --listen=:2345 --api-version=2 github.com/zdunecki/discountly/tests/e2e
+    ports:
+      - "4444:4444"
+      - "2345:2345"
+    security_opt:
+      - "seccomp:unconfined"
+    env_file:
+      - e2e.env
+  e2e:
+    build: .
+    volumes:
+      - ./:/go/src/github.com/zdunecki/discountly/
+    working_dir: /go/src/github.com/zdunecki/discountly/tests/e2e
+    entrypoint: go test
+    depends_on:
+      - e2e_mongo
+      - e2e_geo
+    env_file:
+      - e2e.env
+  e2e_mongo:
+    image: mongo:3.6
+    ports:
+      - 28017:27017
+    volumes:
+      - mongo:/data
+  e2e_geo:
+    image: tile38/tile38
+    ports:
+      - 9951:9851
+  redis:
+    image: redis:5.0
+    volumes:
+      - redis:/data
+
+volumes:
+  mongo:
+  redis:
+
