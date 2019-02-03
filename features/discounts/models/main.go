@@ -18,11 +18,17 @@ type Discount struct {
 	Id         string      `bson:"id,omitempty" json:"id,omitempty"`
 	Name       string      `bson:"name,omitempty" json:"name,omitempty"`
 	Keywords   []string    `bson:"keywords,omitempty" json:"keywords,omitempty"`
-	Locations  []Location  `bson:"locations,omitempty" json:"locations,omitempty"`
-	PromoCodes []PromoCode `bson:"promo_codes,omitempty" json:"promo_codes,omitempty"`
 	ImageUrl   string      `bson:"image_url" json:"image_url"`
+	Locations  []Location  `bson:"locations,omitempty" json:"locations,omitempty"`
 	Rules      []Rule      `bson:"rules,omitempty" json:"rules,omitempty"`
-	Token      string      `bson:"token,omitempty" json:"token"`
+	PromoCodes []PromoCode `bson:"promo_codes,omitempty" json:"promo_codes,omitempty"`
+}
+
+type ProtectedDiscount struct {
+	Id        string     `bson:"id,omitempty" json:"id,omitempty"`
+	Name      string     `bson:"name,omitempty" json:"name,omitempty"`
+	Locations []Location `bson:"locations,omitempty" json:"locations,omitempty"`
+	ImageUrl  string     `bson:"image_url" json:"image_url"`
 }
 
 type DiscountDefinition struct {
@@ -30,3 +36,5 @@ type DiscountDefinition struct {
 	Company   string     `bson:"company" json:"company"`
 	Discounts []Discount `bson:"discounts" json:"discounts"`
 }
+
+

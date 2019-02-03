@@ -15,7 +15,6 @@ func notAuthorized(c *gin.Context) {
 func getJwtToken(c *gin.Context) (*jwt.Token, error) {
 	bearerToken := c.GetHeader("Authorization")
 	if bearerToken == "" {
-		notAuthorized(c)
 		return nil, nil
 	}
 	token := strings.Split(bearerToken, " ")[1]
@@ -23,23 +22,11 @@ func getJwtToken(c *gin.Context) (*jwt.Token, error) {
 	return ParseJWT(token)
 }
 
-func authorized() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		_, err := getJwtToken(c)
-
-		if err != nil {
-			notAuthorized(c)
-			return
-		}
-		c.Next()
-	}
-}
-
 func AuthorizedOwnResources() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		jwtToken, err := getJwtToken(c)
 
-		if err != nil {
+		if err != nil || jwtToken == nil {
 			notAuthorized(c)
 			return
 		}

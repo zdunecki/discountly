@@ -1,13 +1,16 @@
 package search
 
 import (
+	"fmt"
+	"github.com/dgrijalva/jwt-go"
+	"github.com/gomodule/redigo/redis"
+	"github.com/jinzhu/copier"
 	"github.com/zdunecki/discountly/db"
 	"github.com/zdunecki/discountly/features/discounts/models"
+	"github.com/zdunecki/discountly/features/notifications"
 	"github.com/zdunecki/discountly/features/search/finder"
 	"github.com/zdunecki/discountly/features/search/models"
 	"github.com/zdunecki/discountly/infra"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/jinzhu/copier"
 	"sync"
 	"time"
 )
@@ -18,11 +21,10 @@ func init() {
 	secret = []byte(infra.GetEnv("JWT_SECRET"))
 }
 
-
 //TODO: find faster and solution that jwt token
-func createPromoCode(discount discounts.Discount) (*discounts.PromoCodeToken, error) {
+func createPromoCodeToken(discount discounts.ProtectedDiscount) (string, error) {
 	claims := struct {
-		discounts.Discount
+		discounts.ProtectedDiscount
 		jwt.StandardClaims
 	}{
 		discount,
@@ -35,14 +37,14 @@ func createPromoCode(discount discounts.Discount) (*discounts.PromoCodeToken, er
 	tokenString, err := token.SignedString(secret)
 
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return &discounts.PromoCodeToken{Discount: tokenString}, nil
+	return tokenString, nil
 }
 
-func findBestDiscounts(wg *sync.WaitGroup, s search.Search) ([]discounts.Discount, error) {
-	discountChannel := make(chan *discounts.Discount)
+func findBestDiscounts(wg *sync.WaitGroup, criteria search.Search) ([]search.SearchDiscount, error) {
+	discountChannel := make(chan search.SearchDiscount)
 	errorChannel := make(chan error, 1)
 
 	repo, err := database.NewRepo(database.DbConnection())
@@ -50,22 +52,25 @@ func findBestDiscounts(wg *sync.WaitGroup, s search.Search) ([]discounts.Discoun
 		return nil, err
 	}
 
-	defer repo.Session.Close()
+	defer repo.Discounts.Close()
 
-	result := repo.Search.FindAllDefinitionsByKeywords(s)
+	allByKeywords, err := repo.Discounts.FindAllByKeywords(criteria)
+	if err != nil {
+		return nil, err
+	}
+	bestDiscounts := finder.FindBestDiscounts(allByKeywords, criteria)
 
-	cc := finder.FindBestDiscounts(result, s)
-
-	if len(cc) == 0 {
+	if len(bestDiscounts) == 0 {
 		return nil, nil
 	}
 
-	for ii, best := range cc {
+	for ii, b := range bestDiscounts {
 		wg.Add(1)
-		go func(b discounts.Discount, i int) {
+		go func(bestDiscount discounts.Discount, i int) {
 			defer wg.Done()
 
-			promoCode, err := createPromoCode(b)
+			protectedDiscount := &discounts.ProtectedDiscount{}
+			err := copier.Copy(&protectedDiscount, &bestDiscount)
 
 			if err != nil {
 				errorChannel <- err
@@ -73,8 +78,7 @@ func findBestDiscounts(wg *sync.WaitGroup, s search.Search) ([]discounts.Discoun
 				return
 			}
 
-			newDiscount := &discounts.Discount{}
-			err = copier.Copy(&newDiscount, &b)
+			promoCodeToken, err := createPromoCodeToken(*protectedDiscount)
 
 			if err != nil {
 				errorChannel <- err
@@ -82,24 +86,60 @@ func findBestDiscounts(wg *sync.WaitGroup, s search.Search) ([]discounts.Discoun
 				return
 			}
 
-			newDiscount.Token = promoCode.Discount
-			discountChannel <- newDiscount
+			discountChannel <- search.SearchDiscount{
+				ProtectedDiscount: *protectedDiscount,
+				Token: promoCodeToken,
+			}
 
-			if i == (len(cc) - 1) {
+			if i == (len(bestDiscounts) - 1) {
 				close(discountChannel)
 			}
-		}(best, ii)
+		}(b, ii)
 	}
 
 	select {
 	case <-errorChannel:
 		return nil, err
 	default:
-		var response []discounts.Discount
+		var response []search.SearchDiscount
 
-		for d := range discountChannel {
-			response = append(response, *d)
+		for discount := range discountChannel {
+			response = append(response, discount)
 		}
 		return response, nil
 	}
+}
+
+func receiveHook(hook search.Hook) error {
+	split := hook.Split()
+	key := finder.NewGeoFenceUserId(hook.Id)
+
+	conn := database.RedisPool.Get()
+
+	defer func() {
+		err := conn.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	values, err := redis.Values(
+		conn.Do("SMEMBERS", key),
+	)
+
+	if err != nil {
+		return err
+	}
+
+	for _, val := range values {
+		userId := fmt.Sprintf("%s",  val)
+
+		data := map[string]string{"detect": hook.Detect, "discount_id": split.DiscountId}
+
+		if _, err := notifications.Client.Trigger("private-"+userId, finder.HookPointKey, data); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

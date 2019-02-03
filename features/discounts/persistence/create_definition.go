@@ -8,7 +8,7 @@ import (
 )
 
 func (db *DB) CreateDefinition(user auth.User) (bson.ObjectId, error) {
-	collection := db.getCollection()
+	collection := db.getDiscountDefinitionCollection()
 
 	id := uuid.NewV4()
 

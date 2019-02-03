@@ -8,7 +8,7 @@ import (
 func (db *DB) UserDiscounts(userId string) ([]discounts.Discount, error) {
 	result := discounts.DiscountDefinition{}
 
-	collection := db.getCollection()
+	collection := db.getDiscountDefinitionCollection()
 
 	if err := collection.Find(bson.M{"user_id": userId}).One(&result); err != nil {
 		return nil, err

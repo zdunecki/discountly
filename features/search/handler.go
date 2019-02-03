@@ -2,8 +2,9 @@ package search
 
 import (
 	"encoding/json"
-	"github.com/zdunecki/discountly/features/search/models"
 	"github.com/gin-gonic/gin"
+	"github.com/zdunecki/discountly/features/search/models"
+	"io/ioutil"
 	"net/http"
 	"sync"
 )
@@ -28,4 +29,26 @@ func FindBestDiscounts(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func ReceiveNearbyHook(c *gin.Context) {
+	b, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+
+	var hook search.Hook
+
+	if err := json.Unmarshal(b, &hook); err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+
+	if err := receiveHook(hook); err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, "ok")
 }

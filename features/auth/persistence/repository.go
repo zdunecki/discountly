@@ -8,6 +8,7 @@ import (
 type Repository interface {
 	UserExists(user auth.User) (bool, error)
 	Create(user auth.User) (interface{}, error)
+	Close()
 }
 
 type DB struct {

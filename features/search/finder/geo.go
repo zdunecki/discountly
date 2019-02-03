@@ -1,68 +1,199 @@
 package finder
 
 import (
-	"github.com/zdunecki/discountly/features/discounts/models"
-	"github.com/zdunecki/discountly/features/search/models"
-	"github.com/zdunecki/discountly/infra"
+	"fmt"
 	"github.com/gomodule/redigo/redis"
 	"github.com/paulmach/go.geojson"
+	"github.com/zdunecki/discountly/db"
+	"github.com/zdunecki/discountly/features/discounts/models"
+	"github.com/zdunecki/discountly/infra"
 )
+
+const PointKey = "location"
+const HookPointKey = "location.hook"
+const GeoFenceUsersKey = "location.users"
 
 const km = 1000
 const nearbyLocation = 3 * km
 
-var address string
-
-func init() {
-	address = infra.GetEnv("GEO_CONNECTION")
+func NewGeoFenceUserId(geoFenceId string) string {
+	return GeoFenceUsersKey + "|" + geoFenceId
 }
 
-func SetPoint(userId string, locations []discounts.Location) {
-	conn, err := redis.Dial("tcp", address)
+func newGeoFenceId(discountId string, location discounts.Location) string {
+	lon := fmt.Sprintf("%f", location.Lon)
+	lat := fmt.Sprintf("%f", location.Lat)
+
+	return discountId + "|" + lat + "_" + lon
+}
+
+func newLocationId(discountId string, location discounts.Location) string {
+	return discountId + "|" + location.Id
+}
+
+func setPoint(keyId, keyValue string, location discounts.Location) error {
+	conn := database.GeoRedisPool.Get()
+
+	defer func() {
+		err := conn.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	g := geojson.NewPointGeometry([]float64{location.Lon, location.Lat})
+	g.Type = "Point"
+
+	rawJSON, err := g.MarshalJSON()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	defer conn.Close()
+	_, err = conn.Do("SET", keyId, keyValue, "OBJECT", rawJSON)
+	if err != nil {
+		return err
+	}
 
+	return nil
+}
+
+func cacheGeoFenceUsers(geoFenceId string, userId string) error {
+	conn := database.RedisPool.Get()
+
+	defer func() {
+		err := conn.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	key := NewGeoFenceUserId(geoFenceId)
+
+	if _, err := conn.Do("SADD", key, userId); err != nil {
+		return err
+	}
+	if _, err := conn.Do("EXPIRE", key, 60*3); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func SetHookPoint(userId, discountId string, locations []discounts.Location) error {
 	for _, l := range locations {
-		g := geojson.NewPointGeometry([]float64{l.Lon, l.Lat})
-		g.Type = "Point"
-
-		rawJSON, err := g.MarshalJSON()
-		if err != nil {
-			panic(err)
+		keyId := newGeoFenceId(discountId, l)
+		if err := setPoint(HookPointKey, keyId, l); err != nil {
+			return err
 		}
 
-		_, err = conn.Do("SET", "location", l.Id, "OBJECT", rawJSON)
-		if err != nil {
-			panic(err)
+		if err := cacheGeoFenceUsers(keyId, userId); err != nil {
+			return err
 		}
 	}
+
+	return nil
 }
 
-func CloseLocations(search search.Search, discountLocations []discounts.Location) []discounts.Location {
-	var locations []discounts.Location
-	conn, err := redis.Dial("tcp", address)
-	if err != nil {
-		panic(err)
+func SetLocationPoint(discountId string, locations []discounts.Location) error {
+	for _, l := range locations {
+		if err := setPoint(PointKey, newLocationId(discountId, l), l); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func SetLocationHooks(discountId string, locations []discounts.Location) error {
+	conn := database.GeoRedisPool.Get()
+
+	defer func() {
+		err := conn.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	for _, location := range locations {
+		nearby, err := nearbyLocations(location)
+
+		if len(nearby) > 1 { // we've already hook which covered this case
+			continue
+		}
+
+		endpoint := infra.GetEnv("DOCKER_APP_URL") + "/geo-fencing/nearby-hook"
+
+		_, err = conn.Do(
+			"SETHOOK",
+			newGeoFenceId(discountId, location),
+			endpoint,
+			"NEARBY", HookPointKey, "FENCE", "POINT", location.Lat, location.Lon, nearbyLocation,
+		)
+		if err != nil {
+			return err
+		}
 	}
 
-	defer conn.Close()
+	return nil
+}
+
+func DeleteGeoFence(discountId string, locations []discounts.Location) error {
+	conn := database.GeoRedisPool.Get()
+
+	defer func() {
+		err := conn.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	for _, location := range locations {
+		geoFenceId := newGeoFenceId(discountId, location)
+
+		if _, err := conn.Do("DELHOOK", geoFenceId); err != nil {
+			return err
+		}
+		if _, err := conn.Do("DEL", HookPointKey, geoFenceId); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func nearbyLocations(searchLocation discounts.Location) ([]interface{}, error) {
+	conn := database.GeoRedisPool.Get()
+
+	defer func() {
+		err := conn.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	values, err := redis.Values(
-		conn.Do("NEARBY", "location", "POINT", search.Location.Lat, search.Location.Lon, nearbyLocation),
+		conn.Do("NEARBY", PointKey, "POINT", searchLocation.Lat, searchLocation.Lon, nearbyLocation),
 	)
+
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	if len(values) < 2 {
-		panic("invalid value")
+		return nil, err
 	}
 
 	// 0 - cursor
 	values, err = redis.Values(values[1], nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return values, nil
+}
+
+func CloseLocations(discountId string, searchLocation discounts.Location, discountLocations []discounts.Location) []discounts.Location {
+	var locations []discounts.Location
+	values, err := nearbyLocations(searchLocation)
+
 	if err != nil {
 		panic("invalid value")
 	}
@@ -81,7 +212,7 @@ func CloseLocations(search search.Search, discountLocations []discounts.Location
 		point := geometry.Point
 
 		for _, discountLocation := range discountLocations {
-			if discountLocation.Id != locationId {
+			if newLocationId(discountId, discountLocation) != locationId {
 				continue
 			}
 
@@ -95,24 +226,3 @@ func CloseLocations(search search.Search, discountLocations []discounts.Location
 
 	return locations
 }
-
-//TODO: implement hooks
-//func SetLocationHooks(userId string, locations []discounts.Location) {
-//	conn, err := redis.Dial("tcp", ":9851")
-//	if err != nil {
-//		panic(err)
-//	}
-//
-//	defer conn.Close()
-//	appURL := infra.GetEnv("APP_URL")
-//
-//	for _, l := range locations {
-//		keyId := userId + ":" + l.Id
-//
-//		endpoint := appURL + "/test-geo"
-//		_, err = conn.Do("SETHOOK", keyId, endpoint, "NEARBY", "fleet", "FENCE", "POINT", l.Lat, l.Lon)
-//		if err != nil {
-//			panic(err)
-//		}
-//	}
-//}

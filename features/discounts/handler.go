@@ -7,10 +7,22 @@ import (
 	"net/http"
 )
 
-func GetDiscounts(c *gin.Context) {
+func GetUserDiscounts(c *gin.Context) {
 	userId := c.GetHeader("x-user-id")
 
-	response, err := getDiscounts(userId)
+	response, err := getUserDiscounts(userId)
+
+	if err != nil {
+		e, _ := json.Marshal(err)
+		c.JSON(http.StatusInternalServerError, e)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func GetAllDiscounts(c *gin.Context) {
+	response, err := getAllDiscounts()
 
 	if err != nil {
 		e, _ := json.Marshal(err)
@@ -39,7 +51,7 @@ func CreateDiscounts(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusCreated, response)
 }
 
 func UpdateDiscount(c *gin.Context) {
@@ -59,7 +71,7 @@ func UpdateDiscount(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, http.StatusOK)
+	c.JSON(http.StatusNoContent, nil)
 }
 
 func DeleteDiscount(c *gin.Context) {
@@ -73,11 +85,11 @@ func DeleteDiscount(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, http.StatusOK)
+	c.JSON(http.StatusNoContent, nil)
 }
 
 func CreateDiscountPromoCode(c *gin.Context) {
-	token, err := findRevokeToken(c.Query("token"))
+	token, err := findDiscountToken(c.Query("token"))
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, map[string]interface{}{"errors": err.Error()})
@@ -94,11 +106,11 @@ func CreateDiscountPromoCode(c *gin.Context) {
 		return
 	}
 
-	if err := revokeToken(c.Query("token")); err != nil {
+	if err := setDiscountToken(c.Query("token")); err != nil {
 		e, _ := json.Marshal(err)
 		c.JSON(http.StatusInternalServerError, e)
 		return
 	}
 
-	c.JSON(http.StatusOK, http.StatusOK)
+	c.JSON(http.StatusNoContent, nil)
 }

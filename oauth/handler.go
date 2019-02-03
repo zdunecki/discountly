@@ -18,7 +18,8 @@ func signUpUserOrDefault(user models.User) error {
 	if err != nil {
 		return err
 	}
-	defer repo.Session.Close()
+	defer repo.Auth.Close()
+	defer repo.Discounts.Close()
 
 	exists, err := repo.Auth.UserExists(user)
 	if err != nil {

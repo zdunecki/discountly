@@ -5,25 +5,24 @@ import (
 	"github.com/zdunecki/discountly/features/search/models"
 )
 
-func FindBestDiscounts(definitions []discounts.DiscountDefinition, search search.Search) []discounts.Discount {
+func FindBestDiscounts(d []discounts.Discount, search search.Search) []discounts.Discount {
 	var result []discounts.Discount
 
-	for _, definition := range definitions {
-		for _, discount := range definition.Discounts {
-			if !hasKeyword(discount.Keywords, search) || !applyTheRules(discount.Rules) {
-				continue
-			}
-
-			locations := CloseLocations(search, discount.Locations)
-			if locations == nil {
-				continue
-			}
-
-			result = append(
-				result,
-				discountByBestLocations(discount, locations),
-			)
+	for _, discount := range d {
+		if !hasKeyword(discount.Keywords, search) || !ApplyTheRules(discount.Rules) {
+			continue
 		}
+
+		locations := CloseLocations(discount.Id, search.Location, discount.Locations)
+
+		if locations == nil {
+			continue
+		}
+
+		result = append(
+			result,
+			discount,
+		)
 	}
 
 	if len(result) == 0 {
