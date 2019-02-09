@@ -3,7 +3,7 @@ package persistence
 import "gopkg.in/mgo.v2/bson"
 
 func (db *DB) DeleteDiscount(userId, discountId string) error {
-	collection := db.getCollection()
+	collection := db.getDiscountDefinitionCollection()
 
 	err := collection.Update(
 		bson.M{

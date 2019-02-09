@@ -8,40 +8,39 @@ import (
 	"gopkg.in/mgo.v2"
 )
 
-type Session interface {
-	Close()
-}
-
 type Repository struct {
 	Discounts discountsPersistence.Repository
 	Auth      authPersistence.Repository
 	Search    searchPersistence.Repository
-	Session   Session
 }
 
 func DbConnection() string {
 	return infra.GetEnv("DB_CONNECTION")
 }
+var mgoSession *mgo.Session
 
 func NewRepo(dbURI string) (*Repository, error) {
-	session, err := mgo.Dial(dbURI)
+	if mgoSession == nil {
+		session, err := mgo.Dial(dbURI)
+		if err != nil {
+			return nil, err
+		}
 
-	if err != nil {
-		panic(err)
+		mgoSession = session
 	}
+
 	discounts := &discountsPersistence.DB{
-		Session: session,
+		Session: mgoSession.Copy(),
 	}
 	auth := &authPersistence.DB{
-		Session: session,
+		Session: mgoSession.Copy(),
 	}
 	search := &searchPersistence.DB{
-		Session: session,
+		Session: mgoSession.Copy(),
 	}
 	return &Repository{
 		discounts,
 		auth,
 		search,
-		session,
-	}, err
+	}, nil
 }

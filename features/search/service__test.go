@@ -1,27 +1,27 @@
 package search
 
 import (
-	"github.com/zdunecki/discountly/features/auth"
-	"github.com/zdunecki/discountly/features/discounts/models"
 	"github.com/dgrijalva/jwt-go"
 	assert2 "github.com/stretchr/testify/assert"
+	"github.com/zdunecki/discountly/features/auth"
+	"github.com/zdunecki/discountly/features/discounts/models"
 	"testing"
 )
 
 func TestCreatingDiscountPromoCode(t *testing.T) {
 	assert := assert2.New(t)
 
-	d := discounts.Discount{
+	discount := discounts.ProtectedDiscount{
 		Id: "test-id",
 	}
 
-	response, err := createPromoCode(d)
+	promoCodeToken, err := createPromoCodeToken(discount)
 
 	if err != nil {
 		assert.Error(err)
 	}
 
-	jwtToken, err := auth.ParseJWT(response.Discount)
+	jwtToken, err := auth.ParseJWT(promoCodeToken)
 	if err != nil {
 		assert.Error(err)
 	}

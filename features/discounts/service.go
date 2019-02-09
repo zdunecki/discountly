@@ -1,18 +1,21 @@
 package discounts
 
 import (
+	"github.com/dgrijalva/jwt-go"
+	"github.com/gomodule/redigo/redis"
+	"github.com/jinzhu/copier"
 	"github.com/zdunecki/discountly/db"
 	"github.com/zdunecki/discountly/features/auth"
 	"github.com/zdunecki/discountly/features/discounts/models"
 	"github.com/zdunecki/discountly/features/search/finder"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/gomodule/redigo/redis"
 	"os"
 )
 
-func getDiscounts(userId string) ([]discounts.Discount, error) {
+const discountTokenKeyName = "discountToken"
+
+func getUserDiscounts(userId string) ([]discounts.Discount, error) {
 	repo, err := database.NewRepo(database.DbConnection())
-	defer repo.Session.Close()
+	defer repo.Discounts.Close()
 
 	if err != nil {
 		return nil, err
@@ -27,9 +30,32 @@ func getDiscounts(userId string) ([]discounts.Discount, error) {
 	return userDiscounts, nil
 }
 
+func getAllDiscounts() ([]discounts.ProtectedDiscount, error) {
+	repo, err := database.NewRepo(database.DbConnection())
+	defer repo.Discounts.Close()
+
+	if err != nil {
+		return nil, err
+	}
+
+	allDiscounts, err := repo.Discounts.FindAll()
+
+	if err != nil {
+		return nil, err
+	}
+
+	var protectedDiscount []discounts.ProtectedDiscount
+
+	if err := copier.Copy(&protectedDiscount, allDiscounts); err != nil {
+		return nil, err
+	}
+
+	return protectedDiscount, nil
+}
+
 func createDiscounts(d []discounts.Discount, userId string) ([]discounts.Discount, error) {
 	repo, err := database.NewRepo(database.DbConnection())
-	defer repo.Session.Close()
+	defer repo.Discounts.Close()
 
 	if err != nil {
 		return nil, err
@@ -42,9 +68,13 @@ func createDiscounts(d []discounts.Discount, userId string) ([]discounts.Discoun
 	}
 
 	for _, discount := range newDiscounts {
-		go func(locations []discounts.Location) {
-			finder.SetPoint(userId, locations)
-		}(discount.Locations)
+		if err := finder.SetLocationPoint(discount.Id, discount.Locations); err != nil {
+			return nil, err
+		}
+
+		if err := finder.SetLocationHooks(discount.Id, discount.Locations); err != nil {
+			return nil, err
+		}
 	}
 
 	return newDiscounts, nil
@@ -52,7 +82,7 @@ func createDiscounts(d []discounts.Discount, userId string) ([]discounts.Discoun
 
 func updateDiscount(discount discounts.Discount, discountId, userId string) error {
 	repo, err := database.NewRepo(database.DbConnection())
-	defer repo.Session.Close()
+	defer repo.Discounts.Close()
 
 	if err != nil {
 		return err
@@ -64,14 +94,19 @@ func updateDiscount(discount discounts.Discount, discountId, userId string) erro
 		return err
 	}
 
-	finder.SetPoint(userId, updatedLocations)
+	if err := finder.SetLocationPoint(discount.Id, updatedLocations); err != nil {
+		return err
+	}
+	if err := finder.SetLocationHooks(discount.Id, updatedLocations); err != nil {
+		return err
+	}
 
 	return nil
 }
 
 func deleteDiscount(discountId, userId string) error {
 	repo, err := database.NewRepo(database.DbConnection())
-	defer repo.Session.Close()
+	defer repo.Discounts.Close()
 
 	if err != nil {
 		return err
@@ -89,7 +124,7 @@ func createDiscountPromoCode(discountToken string) error {
 	if err != nil {
 		return err
 	}
-	defer repo.Session.Close()
+	defer repo.Discounts.Close()
 
 	jwtToken, err := auth.ParseJWT(discountToken)
 	if err != nil {
@@ -114,35 +149,34 @@ func createDiscountPromoCode(discountToken string) error {
 	return nil
 }
 
-func revokeToken(discountToken string) error {
+func setDiscountToken(discountToken string) error {
 	conn, err := redis.Dial("tcp", os.Getenv("REDIS_CONNECTION"))
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer conn.Close();
 
-	if _, err := conn.Do("SET", "discountToken:"+discountToken, ""); err != nil {
+	if _, err := conn.Do("SET", discountTokenKeyName+":"+discountToken, ""); err != nil {
 		return err
 	}
 
-	if _, err := conn.Do("EXPIRE", "discountToken:"+discountToken, 60 * 5); err != nil {
+	if _, err := conn.Do("EXPIRE", discountTokenKeyName+":"+discountToken, 60*5); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func findRevokeToken(discountToken string) (interface{}, error) {
+func findDiscountToken(discountToken string) (interface{}, error) {
 	conn, err := redis.Dial("tcp", os.Getenv("REDIS_CONNECTION"))
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
-	find, err := conn.Do("GET", "discountToken:"+discountToken)
+	find, err := conn.Do("GET", discountTokenKeyName+":"+discountToken)
 	if err != nil {
 		return nil, err
 	}
 	return find, nil
 }
-

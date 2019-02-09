@@ -29,7 +29,7 @@ func newLocations(locations []discounts.Location) []discounts.Location {
 }
 
 func (db *DB) CreateDiscounts(userId string, d []discounts.Discount) ([]discounts.Discount, error) {
-	collection := db.getCollection()
+	collection := db.getDiscountDefinitionCollection()
 
 	var newDiscounts = make([]discounts.Discount, len(d))
 

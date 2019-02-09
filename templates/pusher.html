@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<head>
+    <title>Pusher Test</title>
+    <script src="https://js.pusher.com/4.3/pusher.js"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+</head>
+<body>
+<div class="row">
+<div class="col-2 bg-dark" style="color:white; position: fixed;height: 100%;top: 0;left: 0; z-index: 999999; overflow-y: scroll" >
+    <h1>Available discounts:</h1>
+    <hr style="background: white">
+    <div id="discounts"></div>
+</div>
+<div class="col-12">
+    <div class="container">
+        <div style="display: flex;">
+            <div>
+                <h1>Geo-fence tester nearby 3km</h1>
+                <h1>Events counter: <input type="number" value="0" id="counter" disabled/></h1>
+            </div>
+            <div>
+                <h1>Error stack</h1>
+                <div class="text-danger" id="errors"></div>
+            </div>
+        </div>
+        <input type="number" id="rescaleLat" value="33.5123"/>
+        <input type="number" id="rescaleLon" value="-112.2693"/>
+        <button class="btn btn-primary btn-sm" type="button" id="rescaleLatLonButton">Rescale lat. and lon.</button>
+        <br>
+        <input type="number" id="rescaleBetween" value="0.0001"/>
+        <button class="btn btn-primary btn-sm" type="button" id="rescaleDiffBetweenPoints">Rescale difference between points</button>
+        <br>
+        <br>
+        <button class="btn btn-primary btn-sm" type="button" id="pushThemAll">Push them all!</button>
+        <div id="results"></div>
+        <div id="tester" style="display: flex; flex-wrap: wrap; justify-content: space-between;"></div>
+    </div>
+</div>
+</div>
+</body>
+<script>
+    // Enable pusher logging - don't include this in production
+    Pusher.logToConsole = true;
+
+    const pusher = new Pusher('bd5311a369a6b7e303b7', {
+        cluster: 'eu',
+        forceTLS: true,
+        authEndpoint: "/notifications/auth"
+    });
+
+    pusher.connection.bind( 'error', function( err ) {
+        document.getElementById("errors").innerHTML = `<b>${err.error.data.message}</b>`
+
+        setTimeout(() => {
+            document.getElementById("errors").innerHTML = "";
+        }, 5000)
+    });
+
+    const privateConnection = pusher.subscribe('private-connection');
+
+    document.getElementById("pushThemAll").addEventListener("click", () => {
+        const [...forms] = document.getElementsByTagName("form");
+
+        forms.map(form => form.children[2].click() );
+    });
+
+    const elements = 50; // FREE SUBSCRIPTION PUSHER LIMIT
+
+    const calcScale = () => {
+        const exampleLat = parseFloat(document.getElementById("rescaleLat").value);
+        const exampleLon = parseFloat(document.getElementById("rescaleLon").value);
+
+        const scale = parseFloat(document.getElementById("rescaleBetween").value);
+
+        const results = [];
+
+        Array(elements).fill([exampleLat, exampleLon]).reduce(([x1, y1],_,z) => {
+            const fixed = String(scale).split(".")[1].length;
+
+            const w = [parseFloat((x1 + scale).toFixed(fixed)), parseFloat((y1 + scale).toFixed(fixed))];
+
+            if (z === 0) {
+                w[0] = parseFloat((w[0] - scale).toFixed(fixed));
+                w[1] = parseFloat((w[1] - scale).toFixed(fixed));
+            }
+
+            results.push(w);
+
+            return w
+        }, [exampleLat, exampleLon]);
+
+        return results;
+    };
+
+    const results = calcScale();
+    let newVal = 0;
+
+    results.map(([lat, lon], i) => {
+        const template = `
+            <div style="margin: 5px 5px 0 0">
+                <form id="${'form' + i}">
+                    <input placeholder="lat" id="${'lat' + i}" value=${lat} type="text">
+                    <input placeholder="lon" id="${'lon' + i}" value=${lon} type="text">
+                    <input class="submit btn btn-primary btn-sm" type="submit" value="Push your position"/>
+                </form>
+                <span id="${'result' + i}"></span>
+            </div>
+        `;
+
+        const privateUserChannel = pusher.subscribe('private-' + i);
+        privateUserChannel.bind('location.hook', function(response) {
+
+            newVal = parseInt(document.getElementById("counter").value) + 1;
+            document.getElementById("counter").value = newVal;
+
+            const placeholder = view => `
+                 <div class="bg-dark" style="padding: 0 5px;">
+                    ${view}
+                </div>
+            `;
+
+            if (response.error && response.error.code === 100) {
+                 return document.getElementById('result' + i).innerHTML += placeholder(`
+                    <b><p class="text-light">error: <span class="text-danger">Discount not applying to the rules</span></p></b>
+                    <b><p class="text-light">discount id: <span class="text-danger">${response.error.discount_id}</span></p></b>
+                `)
+            }
+
+            let className = "";
+
+            if (response.detect === "inside") {
+                className = "text-success"
+            } else if (response.detect === "outside") {
+                className = "text-danger"
+            } else {
+                className = "text-light"
+            }
+
+            document.getElementById('result' + i).innerHTML += placeholder(`
+                <b><p class="text-light">discount id: <span class="text-primary">${response.discount_id}</span></p></b>
+                <b><p class="text-light">is: <span class=${className}>${response.detect}</span></p></b>
+            `)
+        });
+
+        document.getElementById("tester").innerHTML += template;
+    });
+
+    results.map(([lat, lon], i) => {
+        document.getElementById('form' + i).addEventListener("submit", function(e) {
+            e.preventDefault();
+
+            const la = parseFloat(document.getElementById('lat' + i).value) || 0;
+            const lo = parseFloat(document.getElementById('lon' + i).value) || 0;
+
+            if (!lat || !lon) {
+                return
+            }
+
+            const data = {
+                unique_random_id: String(i),
+                location: {
+                    lat: la,
+                    lon: lo,
+                }
+            };
+
+            privateConnection.trigger('client-geofencing', data);
+        });
+    });
+
+    const rescale = () => {
+        const newScale = calcScale();
+
+        newScale.map(([lat, lon], i) => {
+            document.getElementById('lat' + i).value = lat;
+            document.getElementById('lon' + i).value = lon;
+        });
+    };
+
+    document.getElementById("rescaleDiffBetweenPoints").addEventListener("click", rescale);
+    document.getElementById("rescaleLatLonButton").addEventListener("click", rescale);
+
+    (async() => {
+        try {
+            const response = await fetch("http://localhost:4444/discounts");
+            const data = await response.json();
+
+            let template = "";
+
+            data.map(d => {
+                template += `
+                     <p>
+                        discount id:
+                        <br>
+                        ${d.id}
+                     </p>
+                     <p>
+                        locations:
+                        <br>
+                        ${d.locations.map(location => `lat: ${location.lat} lon: ${location.lon}`)}
+                     </p>
+                    <hr style="background: white">
+                `
+            });
+
+            console.log(template);
+            document.getElementById("discounts").innerHTML = template;
+        } catch(e) {
+            console.error(e)
+        }
+    })()
+
+</script>
+</body>

@@ -8,7 +8,7 @@ import (
 func (db *DB) Find(discountId string) (discounts.Discount, error) {
 	result := discounts.DiscountDefinition{}
 
-	collection := db.getCollection()
+	collection := db.getDiscountDefinitionCollection()
 
 	if err := collection.Find(bson.M{"discounts.id": discountId}).One(&result); err != nil {
 		return discounts.Discount{}, err

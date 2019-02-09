@@ -1,6 +1,8 @@
 package e2e
 
 import (
+	"github.com/bouk/monkey"
+	"github.com/stretchr/testify/assert"
 	"github.com/zdunecki/discountly/db"
 	"github.com/zdunecki/discountly/features/auth/models"
 	"github.com/zdunecki/discountly/features/discounts/models"
@@ -8,8 +10,6 @@ import (
 	"github.com/zdunecki/discountly/features/search/models"
 	"github.com/zdunecki/discountly/lib"
 	"github.com/zdunecki/discountly/tests"
-	"github.com/bouk/monkey"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
@@ -72,7 +72,7 @@ func TestFindBestDiscounts(t *testing.T) {
 		panic(err)
 	}
 
-	defer repo.Session.Close()
+	defer repo.Discounts.Close()
 	defer tests.DeleteAll()
 
 	userId := "test-user-id"
@@ -88,9 +88,9 @@ func TestFindBestDiscounts(t *testing.T) {
 		createDiscounts(),
 	)
 
-	finder.SetPoint(userId, createdDiscount[0].Locations)
+	_ = finder.SetLocationPoint(createdDiscount[0].Id, createdDiscount[0].Locations)
 
-	s := search.Search{
+	criteria := search.Search{
 		Keywords: []string{"abc"},
 		Location: discounts.Location{
 			Lat: nearbyTestLat,
@@ -98,10 +98,9 @@ func TestFindBestDiscounts(t *testing.T) {
 		},
 	}
 
-	result := finder.FindBestDiscounts(
-		repo.Search.FindAllDefinitionsByKeywords(s),
-		s,
-	)
+	allByKeyWords, _ := repo.Discounts.FindAllByKeywords(criteria)
+
+	result := finder.FindBestDiscounts(allByKeyWords, criteria)
 
 	assert.Equal(len(result), 1)
 }

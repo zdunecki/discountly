@@ -1,13 +1,11 @@
 package e2e
 
 import (
-	"github.com/zdunecki/discountly/features/auth/models"
+	"github.com/stretchr/testify/assert"
 	"github.com/zdunecki/discountly/features/discounts/models"
 	"github.com/zdunecki/discountly/features/search/finder"
-	"github.com/zdunecki/discountly/features/search/models"
 	"github.com/zdunecki/discountly/infra"
 	"github.com/zdunecki/discountly/tests"
-	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -29,21 +27,20 @@ func TestCloseLocations(t *testing.T) {
 		Lon: testLon,
 	}.New()
 
-	locations := []discounts.Location{
+	discountLocations := []discounts.Location{
 		l,
 	}
 
-	user := auth.User{}.New()
-	finder.SetPoint(user.Id, locations)
-	result := finder.CloseLocations(search.Search{
-		Location: discounts.Location{
-			Lat: nearbyTestLat,
-			Lon: nearbyTestLon,
-		},
-	}, locations)
+	_ = finder.SetLocationPoint(discountLocations[0].Id, discountLocations)
+
+	result := finder.CloseLocations(discountLocations[0].Id, discounts.Location{
+		Lat: nearbyTestLat,
+		Lon: nearbyTestLon,
+	}, discountLocations)
+
 	assert.Equal(result, []discounts.Location{
 		{
-			Id:  l.Id,
+			Id:  discountLocations[0].Id + "|" + l.Id,
 			Lat: testLat,
 			Lon: testLon,
 		},

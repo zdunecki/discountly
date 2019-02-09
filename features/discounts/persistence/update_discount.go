@@ -33,7 +33,7 @@ func updateLocations(locations []discounts.Location) []discounts.Location {
 }
 
 func (db *DB) UpdateUserDiscount(userId string, discountId string, discount discounts.Discount) (interface{}, []discounts.Location, error) {
-	collection := db.getCollection()
+	collection := db.getDiscountDefinitionCollection()
 
 	updateDiscount := discounts.Discount{
 		Name:       discount.Name,
@@ -59,7 +59,7 @@ func (db *DB) UpdateUserDiscount(userId string, discountId string, discount disc
 }
 
 func (db *DB) UpdateDiscount(discountId string, discount discounts.Discount) error {
-	collection := db.getCollection()
+	collection := db.getDiscountDefinitionCollection()
 
 	updateDiscount := discounts.Discount{
 		Name:       discount.Name,
