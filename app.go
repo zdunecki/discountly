@@ -8,6 +8,7 @@ import (
 	"github.com/zdunecki/discountly/features/search"
 	"github.com/zdunecki/discountly/infra"
 	"github.com/zdunecki/discountly/oauth"
+	"net/http"
 )
 
 func main() {
@@ -39,7 +40,12 @@ func main() {
 	discountsRoute.GET("/", discounts.GetAllDiscounts)
 	discountsRoute.POST("/promo-code", discounts.CreateDiscountPromoCode)
 
-	r.StaticFile("/pusherhtml", "./templates/pusher.html") //only for tester
+	r.GET("/pusherhtml", func(c *gin.Context) { //only for tester
+		pusherKey := infra.GetEnv("PUSHER_APP_KEY")
+		appURL := infra.GetEnv("EXPOSE_APP_URL")
+
+		c.HTML(http.StatusOK, "pusher.html", gin.H{"pusher_app_key": pusherKey, "app_url": appURL })
+	})
 
 	if err := r.Run(infra.GetExposedHost()); err != nil {
 		panic(err)
