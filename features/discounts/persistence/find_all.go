@@ -5,12 +5,13 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-func (db *DB) FindAll() ([]discounts.Discount, error) {
-	type AllDiscounts struct {
-		Discounts []discounts.Discount `bson:"discounts" json:"discounts"`
-	}
+type projectDiscounts struct {
+	Discounts []discounts.Discount `bson:"discounts" json:"discounts"`
+}
 
-	var all []AllDiscounts
+// TODO: pagination
+func (db *DB) FindAll() ([]discounts.Discount, error) {
+	var all []projectDiscounts
 
 	collection := db.getDiscountDefinitionCollection()
 

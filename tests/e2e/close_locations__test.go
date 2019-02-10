@@ -33,7 +33,7 @@ func TestCloseLocations(t *testing.T) {
 
 	_ = finder.SetLocationPoint(discountLocations[0].Id, discountLocations)
 
-	result := finder.CloseLocations(discountLocations[0].Id, discounts.Location{
+	result := finder.LocationsCloseOfDiscount(discountLocations[0].Id, discounts.Location{
 		Lat: nearbyTestLat,
 		Lon: nearbyTestLon,
 	}, discountLocations)

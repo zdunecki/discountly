@@ -13,7 +13,7 @@ func FindBestDiscounts(d []discounts.Discount, search search.Search) []discounts
 			continue
 		}
 
-		locations := CloseLocations(discount.Id, search.Location, discount.Locations)
+		locations := LocationsCloseOfDiscount(discount.Id, search.Location, discount.Locations)
 
 		if locations == nil {
 			continue
