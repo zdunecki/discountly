@@ -22,6 +22,23 @@ func getJwtToken(c *gin.Context) (*jwt.Token, error) {
 	return ParseJWT(token)
 }
 
+func AuthorizedResources() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		jwtToken, err := getJwtToken(c)
+
+		if err != nil || jwtToken == nil {
+			notAuthorized(c)
+			return
+		}
+
+		claims := jwtToken.Claims.(jwt.MapClaims)
+
+		c.Set("user_id", claims["user_id"])
+		c.Next()
+		return
+	}
+}
+
 func AuthorizedOwnResources() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		jwtToken, err := getJwtToken(c)
@@ -34,6 +51,7 @@ func AuthorizedOwnResources() gin.HandlerFunc {
 		claims := jwtToken.Claims.(jwt.MapClaims)
 
 		if claims["user_id"] == c.GetHeader("x-user-id") {
+			c.Set("user_id", claims["user_id"])
 			c.Next()
 			return
 		}

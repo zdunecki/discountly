@@ -6,6 +6,7 @@ import (
 )
 
 type Repository interface {
+	Me(userId string) (auth.User, error)
 	UserExists(user auth.User) (bool, error)
 	Create(user auth.User) (interface{}, error)
 	Close()

@@ -5,6 +5,9 @@
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
 </head>
 <body>
+<input type="hidden" id="PUSHER_APP_KEY" value="{{.pusher_app_key}}">
+<input type="hidden" id="APP_URL" value="{{.app_url}}">
+
 <div class="row">
 <div class="col-2 bg-dark" style="color:white; position: fixed;height: 100%;top: 0;left: 0; z-index: 999999; overflow-y: scroll" >
     <h1>Available discounts:</h1>
@@ -41,8 +44,10 @@
 <script>
     // Enable pusher logging - don't include this in production
     Pusher.logToConsole = true;
+    const pusherAppId = document.getElementById("PUSHER_APP_KEY").value;
+    const appUrl = document.getElementById("APP_URL").value;
 
-    const pusher = new Pusher('bd5311a369a6b7e303b7', {
+    const pusher = new Pusher(pusherAppId, {
         cluster: 'eu',
         forceTLS: true,
         authEndpoint: "/notifications/auth"
@@ -182,7 +187,7 @@
 
     (async() => {
         try {
-            const response = await fetch("http://localhost:4444/discounts");
+            const response = await fetch(`${appUrl}/discounts`);
             const data = await response.json();
 
             let template = "";
@@ -203,7 +208,6 @@
                 `
             });
 
-            console.log(template);
             document.getElementById("discounts").innerHTML = template;
         } catch(e) {
             console.error(e)
