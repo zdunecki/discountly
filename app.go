@@ -30,6 +30,9 @@ func main() {
 	oauthRoute.GET("/login", oauth.Redirect)
 	oauthRoute.GET("/callback", oauth.Callback)
 
+	meRoute := r.Group("/me", auth.AuthorizedResources())
+	meRoute.GET("/", auth.Me)
+
 	authorizedDiscountsRoute := r.Group("/me/discounts", auth.AuthorizedOwnResources())
 	authorizedDiscountsRoute.GET("/", discounts.GetUserDiscounts)
 	authorizedDiscountsRoute.POST("/", discounts.CreateDiscounts)

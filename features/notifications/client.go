@@ -16,4 +16,3 @@ func init() {
 		Secure:  true,
 	}
 }
-//eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMTAzNjUyOTYzMTA4NDEwNjExMTE0IiwiZXhwIjoxNTQ5NzM1ODM1fQ.KMOT_al4nMvk02_F13hFnO6OlX_u-v528knuBEkIxJo

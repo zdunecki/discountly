@@ -5,6 +5,20 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+func (db *DB) Me(userId string) (auth.User, error) {
+	var me auth.User
+
+	userSession := db.Session.DB("discountly").C("users")
+
+	if err := userSession.Find(
+		bson.M{
+			"id": userId,
+		}).One(&me); err != nil {
+		return me, err
+	}
+	return me, nil
+}
+
 func (db *DB) UserExists(user auth.User) (bool, error) {
 	userSession := db.Session.DB("discountly").C("users")
 
