@@ -43,11 +43,11 @@ func main() {
 	discountsRoute.GET("/", discounts.GetAllDiscounts)
 	discountsRoute.POST("/promo-code", discounts.CreateDiscountPromoCode)
 
-	r.GET("/pusherhtml", func(c *gin.Context) { //only for tester
+	r.GET("/demo", func(c *gin.Context) { //only for tester
 		pusherKey := infra.GetEnv("PUSHER_APP_KEY")
 		appURL := infra.GetEnv("EXPOSE_APP_URL")
 
-		c.HTML(http.StatusOK, "pusher.html", gin.H{"pusher_app_key": pusherKey, "app_url": appURL })
+		c.HTML(http.StatusOK, "demo.html", gin.H{"pusher_app_key": pusherKey, "app_url": appURL })
 	})
 
 	if err := r.Run(infra.GetExposedHost()); err != nil {
