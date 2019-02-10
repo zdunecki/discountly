@@ -15,6 +15,7 @@ const GeoFenceUsersKey = "location.users"
 
 const km = 1000
 const nearbyLocation = 3 * km
+const expireTTL = 60 * 3
 
 func NewGeoFenceUserId(geoFenceId string) string {
 	return GeoFenceUsersKey + "|" + geoFenceId
@@ -31,7 +32,7 @@ func newLocationId(discountId string, location discounts.Location) string {
 	return discountId + "|" + location.Id
 }
 
-func setPoint(keyId, keyValue string, location discounts.Location) error {
+func setPoint(keyId, keyValue string, location discounts.Location, ttl bool) error {
 	conn := database.GeoRedisPool.Get()
 
 	defer func() {
@@ -54,9 +55,18 @@ func setPoint(keyId, keyValue string, location discounts.Location) error {
 		return err
 	}
 
+	if ttl {
+		_, err = conn.Do("EXPIRE", keyId, keyValue, expireTTL)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
+// Search engine need this because 'location hook' doesn't care about users, we only know location and discount.
+// To correctly identity user we have to store user id in cache with geo-fence key
 func cacheGeoFenceUsers(geoFenceId string, userId string) error {
 	conn := database.RedisPool.Get()
 
@@ -72,7 +82,8 @@ func cacheGeoFenceUsers(geoFenceId string, userId string) error {
 	if _, err := conn.Do("SADD", key, userId); err != nil {
 		return err
 	}
-	if _, err := conn.Do("EXPIRE", key, 60*3); err != nil {
+
+	if _, err := conn.Do("EXPIRE", key, expireTTL); err != nil {
 		return err
 	}
 
@@ -80,9 +91,9 @@ func cacheGeoFenceUsers(geoFenceId string, userId string) error {
 }
 
 func SetHookPoint(userId, discountId string, locations []discounts.Location) error {
-	for _, l := range locations {
-		keyId := newGeoFenceId(discountId, l)
-		if err := setPoint(HookPointKey, keyId, l); err != nil {
+	for _, location := range locations {
+		keyId := newGeoFenceId(discountId, location)
+		if err := setPoint(HookPointKey, keyId, location, true); err != nil {
 			return err
 		}
 
@@ -95,8 +106,8 @@ func SetHookPoint(userId, discountId string, locations []discounts.Location) err
 }
 
 func SetLocationPoint(discountId string, locations []discounts.Location) error {
-	for _, l := range locations {
-		if err := setPoint(PointKey, newLocationId(discountId, l), l); err != nil {
+	for _, location := range locations {
+		if err := setPoint(PointKey, newLocationId(discountId, location), location, false); err != nil {
 			return err
 		}
 	}
@@ -114,7 +125,7 @@ func SetLocationHooks(discountId string, locations []discounts.Location) error {
 	}()
 
 	for _, location := range locations {
-		nearby, err := nearbyLocations(location)
+		nearby, err := NearbyLocations(location)
 
 		if len(nearby) > 1 { // we've already hook which covered this case
 			continue
@@ -159,7 +170,7 @@ func DeleteGeoFence(discountId string, locations []discounts.Location) error {
 	return nil
 }
 
-func nearbyLocations(searchLocation discounts.Location) ([]interface{}, error) {
+func NearbyLocations(searchLocation discounts.Location) ([]interface{}, error) {
 	conn := database.GeoRedisPool.Get()
 
 	defer func() {
@@ -190,9 +201,9 @@ func nearbyLocations(searchLocation discounts.Location) ([]interface{}, error) {
 	return values, nil
 }
 
-func CloseLocations(discountId string, searchLocation discounts.Location, discountLocations []discounts.Location) []discounts.Location {
+func LocationsCloseOfDiscount(discountId string, searchLocation discounts.Location, discountLocations []discounts.Location) []discounts.Location {
 	var locations []discounts.Location
-	values, err := nearbyLocations(searchLocation)
+	values, err := NearbyLocations(searchLocation)
 
 	if err != nil {
 		panic("invalid value")

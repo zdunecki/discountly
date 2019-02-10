@@ -17,6 +17,7 @@ type Repository interface {
 	DeleteDiscount(userId, discountId string) error
 	Find(discountId string) (discounts.Discount, error)
 	FindAll() ([]discounts.Discount, error)
+	FindInIds(discountIds []string) ([]discounts.Discount, error)
 	FindAllByKeywords(search search.Search) ([]discounts.Discount, error)
 	Close()
 }
