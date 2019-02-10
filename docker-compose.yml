@@ -13,13 +13,17 @@ services:
   mongo:
     image: mongo:3.6
     restart: on-failure
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    command: mongod --auth
+    ports:
+      - 27017:27017
     volumes:
       - mongo:/data
   geo:
     image: tile38/tile38
     restart: on-failure
-    ports:
-      - 9851:9851
   redis:
     image: redis:5.0
     restart: on-failure
