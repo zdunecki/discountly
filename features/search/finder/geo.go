@@ -93,11 +93,10 @@ func cacheGeoFenceUsers(geoFenceId string, userId string) error {
 func SetHookPoint(userId, discountId string, locations []discounts.Location) error {
 	for _, location := range locations {
 		keyId := newGeoFenceId(discountId, location)
-		if err := setPoint(HookPointKey, keyId, location, true); err != nil {
+		if err := cacheGeoFenceUsers(keyId, userId); err != nil {
 			return err
 		}
-
-		if err := cacheGeoFenceUsers(keyId, userId); err != nil {
+		if err := setPoint(HookPointKey, keyId, location, true); err != nil {
 			return err
 		}
 	}
